@@ -1,5 +1,8 @@
 package com.coupon.controller
 
+import com.coupon.controller.dto.CouponIssueRequest
+import com.coupon.controller.dto.CouponTemplateCreateRequest
+import com.coupon.controller.dto.StockResponse
 import com.coupon.domain.CouponTemplate
 import com.coupon.redis.CouponRedisService
 import com.coupon.repository.CouponTemplateRepository
@@ -8,19 +11,6 @@ import com.coupon.service.RedisInitService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
-import java.time.LocalDateTime
-
-data class CouponIssueRequest(val userId: Long)
-
-data class CouponTemplateCreateRequest(
-    val name: String,
-    val discountAmount: Int,
-    val totalQuantity: Int,
-    val eventStartAt: LocalDateTime,
-    val eventEndAt: LocalDateTime
-)
-
-data class StockResponse(val couponTemplateId: Long, val remainingStock: Long?)
 
 @RestController
 @RequestMapping("/api/v1")
