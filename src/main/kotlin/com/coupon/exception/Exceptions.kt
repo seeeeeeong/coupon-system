@@ -17,3 +17,9 @@ class CouponSoldOutException(couponTemplateId: Long) :
 
 class RedisUnavailableException :
     RuntimeException("쿠폰 발급 서비스가 일시적으로 중단되었습니다. 잠시 후 다시 시도해주세요.")
+
+class CouponStateInvalidException(couponTemplateId: Long) :
+    RuntimeException("쿠폰 발급 상태가 정상이 아닙니다. 관리자에게 문의해주세요. couponTemplateId=$couponTemplateId")
+
+class AlreadyInitializedException(couponTemplateId: Long) :
+    RuntimeException("이미 초기화된 이벤트입니다. 이벤트 시작 이후에는 재초기화할 수 없습니다. couponTemplateId=$couponTemplateId")

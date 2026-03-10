@@ -3,9 +3,11 @@ package com.coupon.service
 import com.coupon.domain.CouponTemplate
 import com.coupon.exception.CouponAlreadyIssuedException
 import com.coupon.exception.CouponSoldOutException
+import com.coupon.exception.CouponStateInvalidException
 import com.coupon.exception.EventExpiredException
 import com.coupon.exception.EventNotStartedException
 import com.coupon.redis.CouponRedisService
+import com.coupon.redis.LuaResult
 import com.coupon.repository.CouponOutboxRepository
 import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.DisplayName
@@ -14,9 +16,11 @@ import org.mockito.kotlin.*
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.mock.mockito.MockBean
+import org.springframework.test.context.ActiveProfiles
 import java.time.LocalDateTime
 
 @SpringBootTest
+@ActiveProfiles("test")
 class CouponIssueServiceTest {
 
     @Autowired
@@ -79,7 +83,7 @@ class CouponIssueServiceTest {
         val template = makeTemplate()
         whenever(couponTemplateService.getTemplateById(1L)).thenReturn(template)
         doNothing().whenever(couponTemplateService).validateEvent(template)
-        whenever(couponRedisService.tryIssue(1L, 1L)).thenReturn(CouponRedisService.RESULT_DUPLICATE)
+        whenever(couponRedisService.tryIssue(eq(1L), eq(1L), any())).thenReturn(LuaResult.DUPLICATE)
 
         assertThatThrownBy { couponIssueService.issue(1L, 1L) }
             .isInstanceOf(CouponAlreadyIssuedException::class.java)
@@ -91,9 +95,21 @@ class CouponIssueServiceTest {
         val template = makeTemplate()
         whenever(couponTemplateService.getTemplateById(1L)).thenReturn(template)
         doNothing().whenever(couponTemplateService).validateEvent(template)
-        whenever(couponRedisService.tryIssue(1L, 1L)).thenReturn(CouponRedisService.RESULT_SOLD_OUT)
+        whenever(couponRedisService.tryIssue(eq(1L), eq(1L), any())).thenReturn(LuaResult.SOLD_OUT)
 
         assertThatThrownBy { couponIssueService.issue(1L, 1L) }
             .isInstanceOf(CouponSoldOutException::class.java)
+    }
+
+    @Test
+    @DisplayName("Redis STATE_MISSING 결과 시 CouponStateInvalidException")
+    fun `상태 이상`() {
+        val template = makeTemplate()
+        whenever(couponTemplateService.getTemplateById(1L)).thenReturn(template)
+        doNothing().whenever(couponTemplateService).validateEvent(template)
+        whenever(couponRedisService.tryIssue(eq(1L), eq(1L), any())).thenReturn(LuaResult.STATE_MISSING)
+
+        assertThatThrownBy { couponIssueService.issue(1L, 1L) }
+            .isInstanceOf(CouponStateInvalidException::class.java)
     }
 }

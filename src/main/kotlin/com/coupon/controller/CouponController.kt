@@ -56,8 +56,10 @@ class CouponController(
     }
 
     /**
-     * Redis 재고 초기화 (이벤트 시작 전 호출).
-     * 이미 초기화된 경우 덮어쓴다 (이벤트 연장/재설정 지원).
+     * Redis 재고 초기화 (이벤트 시작 전에만 호출 가능).
+     * 이벤트 시작 이후 호출하면 AlreadyInitializedException(409) 반환.
+     * 시작 전에는 여러 번 호출 가능 (설정 변경 대응).
+     * 이벤트 시작 이후 재초기화는 issued Set을 초기화하여 중복 발급이 열리므로 차단한다.
      */
     @PostMapping("/coupon-templates/{couponTemplateId}/init-stock")
     fun initStock(@PathVariable couponTemplateId: Long): ResponseEntity<Map<String, String>> {

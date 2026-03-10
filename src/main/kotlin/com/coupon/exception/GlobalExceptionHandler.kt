@@ -45,6 +45,18 @@ class GlobalExceptionHandler {
             .body(ErrorResponse("SERVICE_UNAVAILABLE", e.message!!))
     }
 
+    @ExceptionHandler(CouponStateInvalidException::class)
+    fun handle(e: CouponStateInvalidException): ResponseEntity<ErrorResponse> {
+        log.error("쿠폰 상태 이상 감지 (미초기화 / TTL 만료 / 키 유실): ${e.message}")
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+            .body(ErrorResponse("COUPON_STATE_INVALID", e.message!!))
+    }
+
+    @ExceptionHandler(AlreadyInitializedException::class)
+    fun handle(e: AlreadyInitializedException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.CONFLICT)
+            .body(ErrorResponse("ALREADY_INITIALIZED", e.message!!))
+
     @ExceptionHandler(Exception::class)
     fun handle(e: Exception): ResponseEntity<ErrorResponse> {
         log.error("예상치 못한 오류 발생", e)

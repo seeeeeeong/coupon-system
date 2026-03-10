@@ -10,8 +10,14 @@ spring:
   sql:
     init:
       mode: never
+  # Kafka: 테스트에서 실제 브로커 연결 시도를 막는다.
+  # KafkaListener는 @SpringBootTest 시 자동으로 뜨려 하므로 auto-startup을 끈다.
   kafka:
     bootstrap-servers: localhost:9092
+    listener:
+      auto-startup: false
+  # Redis: Testcontainers가 동적으로 포트를 주입하므로 여기서는 기본값만 둔다.
+  # 실제 host/port는 RedisTestContainerConfig에서 오버라이드한다.
   data:
     redis:
       host: localhost
