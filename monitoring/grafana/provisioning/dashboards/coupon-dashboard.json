@@ -1,0 +1,102 @@
+{
+  "title": "Coupon System Dashboard",
+  "uid": "coupon-system",
+  "version": 1,
+  "schemaVersion": 38,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "API 요청 TPS",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{uri=\"/api/v1/coupons/{couponTemplateId}/issue\"}[1m]))",
+          "legendFormat": "TPS"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "API 에러율 (%)",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{uri=\"/api/v1/coupons/{couponTemplateId}/issue\", status=~\"4..|5..\"}[1m])) / sum(rate(http_server_requests_seconds_count{uri=\"/api/v1/coupons/{couponTemplateId}/issue\"}[1m])) * 100",
+          "legendFormat": "에러율 %"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "API 응답 시간 (p99, p95, p50)",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri=\"/api/v1/coupons/{couponTemplateId}/issue\"}[1m])) by (le))",
+          "legendFormat": "p99"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri=\"/api/v1/coupons/{couponTemplateId}/issue\"}[1m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{uri=\"/api/v1/coupons/{couponTemplateId}/issue\"}[1m])) by (le))",
+          "legendFormat": "p50"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Kafka Consumer Lag",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "sum(kafka_consumer_fetch_manager_records_lag{topic=\"coupon.issue.request\"}) by (partition)",
+          "legendFormat": "Lag (partition {{partition}})"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "JVM Heap 사용량",
+      "type": "timeseries",
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "jvm_memory_used_bytes{area=\"heap\"}",
+          "legendFormat": "Heap Used"
+        },
+        {
+          "expr": "jvm_memory_max_bytes{area=\"heap\"}",
+          "legendFormat": "Heap Max"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "DB 커넥션 풀 현황",
+      "type": "timeseries",
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active",
+          "legendFormat": "Active"
+        },
+        {
+          "expr": "hikaricp_connections_idle",
+          "legendFormat": "Idle"
+        },
+        {
+          "expr": "hikaricp_connections_pending",
+          "legendFormat": "Pending"
+        }
+      ]
+    }
+  ],
+  "time": {"from": "now-15m", "to": "now"}
+}

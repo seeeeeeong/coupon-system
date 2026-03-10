@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Kotlin
+*.class
+*.kotlin_module
+
+# Spring Boot
+*.jar
+*.war
+*.ear
+target/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (로컬 데이터)
+mysql_data/
+redis_data/
+kafka_data/
+
+# Environment
+.env
+*.env.local
