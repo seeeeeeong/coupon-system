@@ -16,7 +16,7 @@ class CouponEventProducer(
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * 비동기 Kafka 발행. 즉시 반환하고 CompletableFuture가 delivery.timeout.ms 내에 완료된다.
+     * 비동기 Kafka 발행. 즉시 반환하고 CompletableFuture가 delivery.timeout.ms 내에 완료될 가능성을 높인다.
      *
      * 호출부(OutboxRelayScheduler)는 배치 전체의 Future를 모아 한 번에 수집함으로써
      * 100개 순차 대기(sum of RTT) → 병렬 대기(max of RTT)로 전환한다.

@@ -34,7 +34,7 @@ import java.util.concurrent.CompletableFuture
  *  1. 정상 발행 → PUBLISHED, claimToken null
  *  2. RETRYABLE_UNKNOWN (timeout/일시적 오류) → INIT + retryCount++
  *  3. RETRYABLE_UNKNOWN + retry 소진 → FAILED, retryCount 정확히 반영
- *  4. FATAL → FAILED 즉시, retryCount++
+ *  4. FATAL → FAILED 즉시, retryCount 유지 (재시도 시도 자체가 없었으므로)
  *  5. payload 파싱 실패 → FAILED 즉시 (sendAsync 호출 없음), retryCount++
  *  6. 빈 배치 → sendAsync 호출 없음
  *  7. 혼합 (성공/실패 공존) → 각각 올바른 상태
@@ -268,6 +268,7 @@ class OutboxRelaySchedulerTest {
             successIds = listOf(outboxId),
             retryableIds = emptyList(),
             exhaustedIds = emptyList(),
+            fatalIds = emptyList(),
             parseFailedIds = emptyList(),
             claimToken = "stale-token-B"
         )
@@ -281,6 +282,7 @@ class OutboxRelaySchedulerTest {
             successIds = listOf(outboxId),
             retryableIds = emptyList(),
             exhaustedIds = emptyList(),
+            fatalIds = emptyList(),
             parseFailedIds = emptyList(),
             claimToken = tokenA
         )
