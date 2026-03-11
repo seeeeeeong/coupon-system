@@ -2,11 +2,18 @@ package com.coupon.config
 
 import org.apache.kafka.clients.admin.NewTopic
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.kafka.ConcurrentKafkaListenerContainerFactoryConfigurer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
 import org.springframework.kafka.config.TopicBuilder
+import org.springframework.kafka.core.ConsumerFactory
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.kafka.core.ProducerFactory
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer
+import org.springframework.kafka.listener.DefaultErrorHandler
+import org.springframework.kafka.support.serializer.DeserializationException
+import org.springframework.util.backoff.FixedBackOff
 
 @Configuration
 class KafkaConfig(
@@ -29,6 +36,19 @@ class KafkaConfig(
     }
 
     /**
+     * DLT(Dead Letter Topic) 자동 생성.
+     * retry 소진 후 처리 불가 레코드가 이 토픽으로 전달된다.
+     * 운영자가 DLT를 모니터링하여 수동 재처리 또는 원인 분석에 활용한다.
+     */
+    @Bean
+    fun couponIssueDltTopic(): NewTopic {
+        return TopicBuilder.name("$topic.DLT")
+            .partitions(partitions)
+            .replicas(replicationFactor)
+            .build()
+    }
+
+    /**
      * Spring Boot auto-configuration의 ProducerFactory를 그대로 활용.
      * application.yml의 spring.kafka.producer 설정이 ProducerFactory에 반영된다.
      * KafkaTemplate<String, Any>: 이벤트 타입 확장 시에도 유연하게 대응.
@@ -36,5 +56,44 @@ class KafkaConfig(
     @Bean
     fun kafkaTemplate(producerFactory: ProducerFactory<String, Any>): KafkaTemplate<String, Any> {
         return KafkaTemplate(producerFactory)
+    }
+
+    /**
+     * KafkaListenerContainerFactory 커스터마이징.
+     *
+     * configurer.configure(): spring.kafka.listener.* 설정(ack-mode, auto-startup 등)을
+     * 모두 factory에 적용한다. 직접 설정하면 application.yml과 이중 관리가 발생하므로
+     * configurer에 위임하여 단일 진실의 원천을 유지한다.
+     *
+     * 에러 처리 전략:
+     *   DeserializationException → non-retryable, 즉시 DLT 전송 (재시도해도 동일 오류 반복)
+     *   그 외 예외(DB 장애 등) → ExponentialBackOff(1s→2s→4s, max 3회 재시도) 후 DLT 전송
+     *
+     * DLT: DeadLetterPublishingRecoverer가 {topic}.DLT 토픽으로 원본 레코드를 전송.
+     * 운영자가 DLT 레코드를 확인 후 수동 재처리 또는 원인 제거 후 재발행한다.
+     * 실제 운영: Slack/PagerDuty 알림 + DLT Consumer 연동 지점.
+     */
+    @Bean
+    fun kafkaListenerContainerFactory(
+        configurer: ConcurrentKafkaListenerContainerFactoryConfigurer,
+        consumerFactory: ConsumerFactory<Any, Any>,
+        kafkaTemplate: KafkaTemplate<String, Any>,
+        @Value("\${coupon.kafka.listener.concurrency}") concurrency: Int
+    ): ConcurrentKafkaListenerContainerFactory<Any, Any> {
+        val factory = ConcurrentKafkaListenerContainerFactory<Any, Any>()
+        // spring.kafka.listener.* 전체(ack-mode, auto-startup 등)를 factory에 위임 적용
+        configurer.configure(factory, consumerFactory)
+
+        val recoverer = DeadLetterPublishingRecoverer(kafkaTemplate)
+        // 1s 간격, 최대 3회 재시도. 소진 후 DLT 전송.
+        val backOff = FixedBackOff(1_000L, 3L)
+        val errorHandler = DefaultErrorHandler(recoverer, backOff)
+        // 역직렬화 실패는 재시도해도 동일 오류 → non-retryable로 분류, 즉시 DLT
+        errorHandler.addNotRetryableExceptions(DeserializationException::class.java)
+
+        factory.setCommonErrorHandler(errorHandler)
+        factory.setConcurrency(concurrency)
+
+        return factory
     }
 }
