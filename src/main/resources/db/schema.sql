@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS coupon_outbox (
     payload     JSON         NOT NULL,
     status      VARCHAR(20)  NOT NULL DEFAULT 'INIT',
     retry_count INT          NOT NULL DEFAULT 0,
+    claim_token VARCHAR(36)  NULL,     -- relay 인스턴스 세대 식별자. PUBLISHING 상태에서만 값 존재
     created_at  DATETIME     NOT NULL,
     updated_at  DATETIME     NOT NULL,
     INDEX idx_status_id (status, id)

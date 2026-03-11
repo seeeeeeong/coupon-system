@@ -43,7 +43,16 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
         max.in.flight.requests.per.connection: 5
-        retries: 3
+        # delivery.timeout.ms < batch-collect-timeout-seconds(15s) 이어야
+        # producer가 먼저 완료될 가능성을 높인다.
+        # (thread scheduling, JVM pause로 순서 역전 가능성은 남아 있음)
+        # 순서가 역전되면 앱이 timeout으로 RETRYABLE_UNKNOWN 처리하는 동안
+        # 백그라운드 producer가 나중에 성공 → 중복 발행 경로가 열릴 수 있다.
+        delivery.timeout.ms: 10000     # 10s. batchCollectTimeout(15s)보다 짧게
+        request.timeout.ms: 3000       # 개별 broker 요청 응답 대기
+        linger.ms: 20                  # 20ms 대기 후 배치 묶어 전송 → 처리량 향상
+        batch.size: 32768              # 32KB (기본 16KB 대비 2배)
+        compression.type: snappy       # 네트워크 비용 및 broker 부하 절감
     consumer:
       group-id: coupon-consumer-group
       auto-offset-reset: earliest
@@ -64,8 +73,12 @@ coupon:
     relay:
       batch-size: 100
       max-retry: 5
+      batch-collect-timeout-seconds: 15  # delivery.timeout.ms(10s)보다 길게 설정
     scheduler:
       fixed-delay: 1000
+    recovery:
+      fixed-delay: 60000
+      stuck-threshold-minutes: 5
 
 management:
   endpoints:

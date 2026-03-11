@@ -1,32 +1,58 @@
 package com.coupon.kafka
 
+import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.SerializationException
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.kafka.core.KafkaTemplate
 import org.springframework.stereotype.Component
+import java.util.concurrent.CompletableFuture
 
 @Component
 class CouponEventProducer(
-    private val kafkaTemplate: KafkaTemplate<String, CouponIssueEvent>,
+    private val kafkaTemplate: KafkaTemplate<String, Any>,
     @Value("\${coupon.kafka.topic}") private val topic: String
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     /**
-     * Kafka에 쿠폰 발급 이벤트를 발행한다.
-     * Key는 userId로 설정하여 파티션 분산 효과를 얻는다.
-     * (couponTemplateId를 Key로 쓰면 단일 파티션에 몰리는 Hot Partition 문제 발생)
+     * 비동기 Kafka 발행. 즉시 반환하고 CompletableFuture가 delivery.timeout.ms 내에 완료된다.
      *
-     * @return true: 발행 성공, false: 발행 실패
+     * 호출부(OutboxRelayScheduler)는 배치 전체의 Future를 모아 한 번에 수집함으로써
+     * 100개 순차 대기(sum of RTT) → 병렬 대기(max of RTT)로 전환한다.
+     *
+     * Key는 userId로 설정하여 파티션 분산.
+     * couponTemplateId를 Key로 쓰면 단일 파티션 집중(Hot Partition) 문제 발생.
      */
-    fun publish(event: CouponIssueEvent): Boolean {
-        return try {
-            kafkaTemplate.send(topic, event.userId.toString(), event).get()
-            log.debug("Kafka 발행 성공. eventId={}, userId={}", event.eventId, event.userId)
-            true
-        } catch (e: Exception) {
-            log.warn("Kafka 발행 실패. eventId={}, userId={}, error={}", event.eventId, event.userId, e.message)
-            false
+    fun sendAsync(event: CouponIssueEvent): CompletableFuture<ProduceResult> {
+        return kafkaTemplate.send(topic, event.userId.toString(), event)
+            .handle { _, ex ->
+                if (ex == null) {
+                    log.debug("Kafka 발행 성공. eventId={}, userId={}", event.eventId, event.userId)
+                    ProduceResult.SUCCESS
+                } else {
+                    classify(ex.cause ?: ex, event)
+                }
+            }
+    }
+
+    private fun classify(ex: Throwable, event: CouponIssueEvent): ProduceResult {
+        return when (ex) {
+            is SerializationException,
+            is InvalidTopicException -> {
+                log.error(
+                    "Kafka 발행 영구 실패(FATAL). eventId={}, userId={}, error={}",
+                    event.eventId, event.userId, ex.message
+                )
+                ProduceResult.FATAL
+            }
+            else -> {
+                log.warn(
+                    "Kafka 발행 실패(RETRYABLE_UNKNOWN). eventId={}, userId={}, error={}",
+                    event.eventId, event.userId, ex.message
+                )
+                ProduceResult.RETRYABLE_UNKNOWN
+            }
         }
     }
 }
