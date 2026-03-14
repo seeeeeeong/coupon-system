@@ -47,21 +47,4 @@ class CouponOutbox(
     @Column(nullable = false)
     var updatedAt: LocalDateTime = LocalDateTime.now()
 ) {
-    fun markPublished() {
-        this.status = OutboxStatus.PUBLISHED
-        this.updatedAt = LocalDateTime.now()
-    }
-
-    fun markFailed() {
-        this.status = OutboxStatus.FAILED
-        this.updatedAt = LocalDateTime.now()
-    }
-
-    fun returnToInit() {
-        this.retryCount++
-        this.status = OutboxStatus.INIT
-        this.updatedAt = LocalDateTime.now()
-    }
-
-    fun isMaxRetryExceeded(maxRetry: Int) = retryCount >= maxRetry
 }

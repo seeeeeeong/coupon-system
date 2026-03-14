@@ -23,3 +23,6 @@ class CouponStateInvalidException(couponTemplateId: Long) :
 
 class AlreadyInitializedException(couponTemplateId: Long) :
     RuntimeException("이미 초기화된 이벤트입니다. 이벤트 시작 이후에는 재초기화할 수 없습니다. couponTemplateId=$couponTemplateId")
+
+class InvalidEventPeriodException :
+    RuntimeException("이벤트 종료 시각은 시작 시각보다 이후여야 합니다.")

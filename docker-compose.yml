@@ -33,7 +33,10 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    # noeviction: stock/issued는 정합성 저장소이므로 eviction 금지.
+    # 메모리 압박 시 에러를 내어 즉시 탐지 가능. allkeys-lru는 issued Set이 조용히
+    # 증발하여 중복 방어가 무력화될 수 있어 이 시스템에서는 사용 불가.
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

@@ -4,10 +4,10 @@ import com.coupon.controller.dto.CouponIssueRequest
 import com.coupon.controller.dto.CouponTemplateCreateRequest
 import com.coupon.controller.dto.StockResponse
 import com.coupon.domain.CouponTemplate
-import com.coupon.redis.CouponRedisService
-import com.coupon.repository.CouponTemplateRepository
 import com.coupon.service.CouponIssueService
+import com.coupon.service.CouponTemplateService
 import com.coupon.service.RedisInitService
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -17,8 +17,7 @@ import org.springframework.web.bind.annotation.*
 class CouponController(
     private val couponIssueService: CouponIssueService,
     private val redisInitService: RedisInitService,
-    private val couponTemplateRepository: CouponTemplateRepository,
-    private val couponRedisService: CouponRedisService
+    private val couponTemplateService: CouponTemplateService
 ) {
 
     /**
@@ -29,7 +28,7 @@ class CouponController(
     @PostMapping("/coupons/{couponTemplateId}/issue")
     fun issueCoupon(
         @PathVariable couponTemplateId: Long,
-        @RequestBody request: CouponIssueRequest
+        @RequestBody @Valid request: CouponIssueRequest
     ): ResponseEntity<Map<String, String>> {
         couponIssueService.issue(couponTemplateId, request.userId)
         return ResponseEntity.status(HttpStatus.ACCEPTED)
@@ -41,25 +40,16 @@ class CouponController(
      */
     @PostMapping("/coupon-templates")
     fun createTemplate(
-        @RequestBody request: CouponTemplateCreateRequest
+        @RequestBody @Valid request: CouponTemplateCreateRequest
     ): ResponseEntity<CouponTemplate> {
-        val template = couponTemplateRepository.save(
-            CouponTemplate(
-                name = request.name,
-                discountAmount = request.discountAmount,
-                totalQuantity = request.totalQuantity,
-                eventStartAt = request.eventStartAt,
-                eventEndAt = request.eventEndAt
-            )
-        )
-        return ResponseEntity.status(HttpStatus.CREATED).body(template)
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(couponTemplateService.createTemplate(request))
     }
 
     /**
      * Redis 재고 초기화 (이벤트 시작 전에만 호출 가능).
      * 이벤트 시작 이후 호출하면 AlreadyInitializedException(409) 반환.
      * 시작 전에는 여러 번 호출 가능 (설정 변경 대응).
-     * 이벤트 시작 이후 재초기화는 issued Set을 초기화하여 중복 발급이 열리므로 차단한다.
      */
     @PostMapping("/coupon-templates/{couponTemplateId}/init-stock")
     fun initStock(@PathVariable couponTemplateId: Long): ResponseEntity<Map<String, String>> {
@@ -72,7 +62,6 @@ class CouponController(
      */
     @GetMapping("/coupon-templates/{couponTemplateId}/stock")
     fun getStock(@PathVariable couponTemplateId: Long): ResponseEntity<StockResponse> {
-        val stock = couponRedisService.getStock(couponTemplateId)
-        return ResponseEntity.ok(StockResponse(couponTemplateId, stock))
+        return ResponseEntity.ok(StockResponse(couponTemplateId, couponTemplateService.getStock(couponTemplateId)))
     }
 }

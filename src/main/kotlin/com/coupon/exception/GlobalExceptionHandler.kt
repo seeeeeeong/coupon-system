@@ -3,6 +3,7 @@ package com.coupon.exception
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 
@@ -56,6 +57,19 @@ class GlobalExceptionHandler {
     fun handle(e: AlreadyInitializedException): ResponseEntity<ErrorResponse> =
         ResponseEntity.status(HttpStatus.CONFLICT)
             .body(ErrorResponse("ALREADY_INITIALIZED", e.message!!))
+
+    @ExceptionHandler(InvalidEventPeriodException::class)
+    fun handle(e: InvalidEventPeriodException): ResponseEntity<ErrorResponse> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse("INVALID_EVENT_PERIOD", e.message!!))
+
+    @ExceptionHandler(MethodArgumentNotValidException::class)
+    fun handle(e: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
+        val message = e.bindingResult.fieldErrors
+            .joinToString(", ") { "${it.field}: ${it.defaultMessage}" }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(ErrorResponse("INVALID_REQUEST", message))
+    }
 
     @ExceptionHandler(Exception::class)
     fun handle(e: Exception): ResponseEntity<ErrorResponse> {

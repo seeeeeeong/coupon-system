@@ -56,6 +56,28 @@ class CouponRedisService(
          *   이를 SOLD_OUT으로 처리하면 운영 장애가 비즈니스 상태로 위장되어
          *   모니터링에서 감지하기 어려워진다.
          */
+        /**
+         * Redis best-effort 롤백 스크립트.
+         *
+         * Outbox 저장 실패 시 Redis에서 재고 차감과 issued 등록을 원복한다.
+         * stock 키가 살아 있는 경우에만 INCR하여 TTL 만료 극단 케이스를 방어한다.
+         * 롤백 자체도 실패할 수 있으므로 호출부에서 예외를 삼키고 원본 예외를 전파해야 한다.
+         *
+         * KEYS[1] = stock key
+         * KEYS[2] = issued set key
+         * ARGV[1] = userId
+         */
+        val ROLLBACK_SCRIPT: RedisScript<Long> = RedisScript.of(
+            """
+            if redis.call('EXISTS', KEYS[1]) == 1 then
+                redis.call('INCR', KEYS[1])
+            end
+            redis.call('SREM', KEYS[2], ARGV[1])
+            return 1
+            """.trimIndent(),
+            Long::class.java
+        )
+
         val ISSUE_SCRIPT: RedisScript<Long> = RedisScript.of(
             """
             local isMember = redis.call('SISMEMBER', KEYS[2], ARGV[1])
@@ -124,6 +146,33 @@ class CouponRedisService(
         }
 
         return LuaResult.from(raw)
+    }
+
+    /**
+     * Outbox 저장 실패 시 Redis 상태를 best-effort로 원복한다.
+     *
+     * - stock 키 존재 시 INCR (재고 복구)
+     * - issued Set에서 userId SREM (중복 기록 제거)
+     *
+     * 이 롤백 자체도 Redis 장애 시 실패할 수 있다.
+     * 실패 시에는 stock/issued 불일치 상태가 유지되며 어드민 수동 보상이 필요하다.
+     * 예외는 삼켜서 원본 DB 예외가 호출부까지 전파되도록 한다.
+     */
+    fun rollbackIssue(couponTemplateId: Long, userId: Long) {
+        try {
+            redisTemplate.execute(
+                ROLLBACK_SCRIPT,
+                listOf(stockKey(couponTemplateId), issuedKey(couponTemplateId)),
+                userId.toString()
+            )
+            log.warn("Redis 롤백 완료. couponTemplateId={}, userId={}", couponTemplateId, userId)
+        } catch (e: Exception) {
+            // 롤백 실패: stock/issued 불일치 상태 유지. 어드민 수동 보상 필요.
+            log.error(
+                "Redis 롤백 실패. 수동 보상 필요. couponTemplateId={}, userId={}",
+                couponTemplateId, userId, e
+            )
+        }
     }
 
     fun getStock(couponTemplateId: Long): Long? =
